@@ -1,6 +1,6 @@
 package com.example.ble_sync_suite_app
 
-// BLE Manager: BLE scan, connect, GATT, and CheepSync. Sync math is in sync/CheepSync.kt.
+// BLE Manager: BLE scan, connect, multi-GATT, and CheepSync. Sync math is in sync/CheepSync.kt.
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
@@ -27,14 +27,15 @@ import com.example.ble_sync_suite_app.sync.CheepSync
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 
 class BleManager(
     private val activity: ComponentActivity,
     private val hasScanPermission: () -> Boolean,
     private val hasConnectPermission: () -> Boolean,
     private val onDeviceFound: (String) -> Unit,
-    private val onConnected: (String) -> Unit,
-    private val onDisconnected: () -> Unit,
+    private val onConnected: (deviceName: String, deviceAddress: String) -> Unit,
+    private val onDisconnected: (deviceAddress: String) -> Unit,
     private val onCharacteristicsDiscovered: (List<CharacteristicInfo>) -> Unit,
     private val onPacketReceived: (EspPacket) -> Unit
 ) {
@@ -42,54 +43,51 @@ class BleManager(
     private val bluetoothAdapter = bluetoothManager?.adapter
     private var bluetoothLeScanner: BluetoothLeScanner? = null
 
-    var bluetoothGatt: BluetoothGatt? = null
-        private set
+    private val gattByAddress = mutableMapOf<String, BluetoothGatt>()
+    private val cheepSyncByAddress = mutableMapOf<String, CheepSync>()
+    private val connectingAddresses = mutableSetOf<String>()
 
-    // CheepSync: delegated to sync.CheepSync (standalone module, no BLE dependency)
-    private val cheepSync = CheepSync(windowSize = CheepSync.DEFAULT_WINDOW_SIZE)
+    private val _cheepSyncAlphaByDevice = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val cheepSyncAlphaByDevice: StateFlow<Map<String, Double>> = _cheepSyncAlphaByDevice.asStateFlow()
+    private val _cheepSyncBetaByDevice = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val cheepSyncBetaByDevice: StateFlow<Map<String, Double>> = _cheepSyncBetaByDevice.asStateFlow()
+    private val _cheepSyncRmsResidualMsByDevice = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val cheepSyncRmsResidualMsByDevice: StateFlow<Map<String, Double>> = _cheepSyncRmsResidualMsByDevice.asStateFlow()
 
-    private val _cheepSyncAlpha = MutableStateFlow(0.0)
-    private val _cheepSyncBeta = MutableStateFlow(1.0)
-    val cheepSyncAlpha: StateFlow<Double> = _cheepSyncAlpha.asStateFlow()
-    val cheepSyncBeta: StateFlow<Double> = _cheepSyncBeta.asStateFlow()
-    private val _cheepSyncRmsResidualMs = MutableStateFlow(0.0)
-    val cheepSyncRmsResidualMs: StateFlow<Double> = _cheepSyncRmsResidualMs.asStateFlow()
+    private fun addrKey(address: String) = address.uppercase()
 
-    private fun resetCheepSync() {
-        cheepSync.reset()
-        _cheepSyncAlpha.value = 0.0
-        _cheepSyncBeta.value = 1.0
-        _cheepSyncRmsResidualMs.value = 0.0
+    private fun resetCheepSyncForDevice(address: String) {
+        val key = addrKey(address)
+        cheepSyncByAddress.remove(key)?.reset()
+        _cheepSyncAlphaByDevice.value = _cheepSyncAlphaByDevice.value - key
+        _cheepSyncBetaByDevice.value = _cheepSyncBetaByDevice.value - key
+        _cheepSyncRmsResidualMsByDevice.value = _cheepSyncRmsResidualMsByDevice.value - key
     }
 
-    /**
-     * Add a (tb, Tr) sample and recompute α, β via least-squares over a sliding window.
-     *
-     * This matches the paper’s “continuous skew adjustments over a measurement window”
-     * using linear regression for frequency (β) and phase/offset (α). :contentReference[oaicite:2]{index=2}
-     */
     private fun updateCheepSync(packet: EspPacket) {
+        val key = addrKey(packet.deviceAddress)
+        val cheepSync = cheepSyncByAddress.getOrPut(key) { CheepSync(windowSize = CheepSync.DEFAULT_WINDOW_SIZE) }
         cheepSync.addSample(packet.tUs, packet.receivedAtNs)
-        _cheepSyncAlpha.value = cheepSync.alpha
-        _cheepSyncBeta.value = cheepSync.beta
-        _cheepSyncRmsResidualMs.value = cheepSync.rmsResidualMs
+        _cheepSyncAlphaByDevice.value = _cheepSyncAlphaByDevice.value + (key to cheepSync.alpha)
+        _cheepSyncBetaByDevice.value = _cheepSyncBetaByDevice.value + (key to cheepSync.beta)
+        _cheepSyncRmsResidualMsByDevice.value = _cheepSyncRmsResidualMsByDevice.value + (key to cheepSync.rmsResidualMs)
     }
 
     /**
-     * Map a beacon timestamp (μs since beacon boot) into the phone’s monotonic ns timeline:
-     *   T_hat_phone_ns = α + β * tb_ns
-     *
-     * This is the “use the estimated skew+offset to coordinate time” step. :contentReference[oaicite:3]{index=3}
+     * Map a beacon timestamp (μs since beacon boot) into the phone’s monotonic ns timeline for a given board.
      */
-    fun mapBeaconToPhoneNs(beaconTimeUs: Long): Long =
-        cheepSync.mapBeaconToReceiverNs(beaconTimeUs)
+    fun mapBeaconToPhoneNs(beaconTimeUs: Long, deviceAddress: String): Long {
+        val cs = cheepSyncByAddress[addrKey(deviceAddress)]
+            ?: error("No CheepSync state for $deviceAddress")
+        return cs.mapBeaconToReceiverNs(beaconTimeUs)
+    }
 
-    /**
-     * Convenience: estimate current one-way delay-like residual for the most recent packet.
-     * (Not the paper’s low-level event “best fit” selection; just a sanity metric.)
-     */
-    fun estimateLatestResidualMs(packet: EspPacket): Double =
-        cheepSync.residualMs(packet.tUs, packet.receivedAtNs)
+    fun estimateLatestResidualMs(packet: EspPacket): Double {
+        val cs = cheepSyncByAddress[addrKey(packet.deviceAddress)] ?: return 0.0
+        return cs.residualMs(packet.tUs, packet.receivedAtNs)
+    }
+
+    fun connectionCount(): Int = gattByAddress.size
 
     // -----------------------------
     // BLE scanning
@@ -117,10 +115,14 @@ class BleManager(
         @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            val address = addrKey(gatt.device.address)
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                Log.e("BLE", "GATT failed status=$status")
+                Log.e("BLE", "GATT failed status=$status addr=$address")
+                connectingAddresses.remove(address)
+                gattByAddress.remove(address)
+                resetCheepSyncForDevice(address)
                 activity.runOnUiThread {
-                    Toast.makeText(activity, "Lost connection", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, "Connection failed ($status)", Toast.LENGTH_SHORT).show()
                 }
                 gatt.close()
                 return
@@ -128,31 +130,34 @@ class BleManager(
 
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    connectingAddresses.remove(address)
+                    gattByAddress[address] = gatt
+                    cheepSyncByAddress.getOrPut(address) { CheepSync(windowSize = CheepSync.DEFAULT_WINDOW_SIZE) }
+
                     val name = gatt.device.name ?: "Unnamed"
                     activity.runOnUiThread {
                         Toast.makeText(activity, "Connected to $name", Toast.LENGTH_SHORT).show()
-                        onConnected(name)
+                        onConnected(name, address)
                     }
                     gatt.requestMtu(247)
                     gatt.discoverServices()
                 }
 
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    resetCheepSync()
+                    resetCheepSyncForDevice(address)
+                    gattByAddress.remove(address)
+                    connectingAddresses.remove(address)
                     activity.runOnUiThread {
-                        Toast.makeText(activity, "Disconnected", Toast.LENGTH_SHORT).show()
-                        onDisconnected()
+                        Toast.makeText(activity, "Disconnected $address", Toast.LENGTH_SHORT).show()
+                        onDisconnected(address)
                     }
                     gatt.close()
-                    bluetoothGatt = null
                 }
 
                 else -> Log.w("BLE", "Unknown state: $newState")
             }
         }
 
-        // Called when the ESP32 characteristic sends a notification (each packet).
-        // Packet layout: 4 bytes seq (u32 LE), 8 bytes tUs (u64 LE). We add receivedAtNs on the phone.
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             if (characteristic.uuid != ESP32_CHAR_UUID) return
 
@@ -160,11 +165,16 @@ class BleManager(
             val value = characteristic.value ?: return
             if (value.size < 12) return
 
+            val address = addrKey(gatt.device.address)
+            val devName = gatt.device.name ?: "Unnamed"
+
             try {
                 val packet = EspPacket(
                     seq = u32LE(value, 0),
                     tUs = u64LE(value, 4),
-                    receivedAtNs = SystemClock.elapsedRealtimeNanos()
+                    receivedAtNs = SystemClock.elapsedRealtimeNanos(),
+                    deviceAddress = address,
+                    deviceName = devName
                 )
 
                 updateCheepSync(packet)
@@ -179,12 +189,14 @@ class BleManager(
             if (status != BluetoothGatt.GATT_SUCCESS) Log.e("BLE", "Descriptor write failed")
         }
 
-        // After connection: find ESP32 service/characteristic, enable notifications, report to UI.
         @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             super.onServicesDiscovered(gatt, status)
             if (status != BluetoothGatt.GATT_SUCCESS) return
+
+            val address = addrKey(gatt.device.address)
+            val devName = gatt.device.name ?: "Unnamed"
 
             gatt.getService(ESP32_SERVICE_UUID)?.getCharacteristic(ESP32_CHAR_UUID)?.let { tx ->
                 gatt.setCharacteristicNotification(tx, true)
@@ -205,7 +217,9 @@ class BleManager(
                     standardServiceNames[ESP32_SERVICE_UUID] ?: "Environmental Sensing",
                     tx.uuid,
                     "ESP32 Sensor Data",
-                    propsList
+                    propsList,
+                    deviceAddress = address,
+                    deviceName = devName
                 )
 
                 activity.runOnUiThread { onCharacteristicsDiscovered(listOf(info)) }
@@ -214,15 +228,15 @@ class BleManager(
 
         override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
+                val address = addrKey(gatt.device.address)
                 @Suppress("DEPRECATION")
                 val bytes = characteristic.value
-                readValues[characteristic.uuid] =
+                readValues[readValueKey(address, characteristic.uuid)] =
                     bytes?.joinToString(" ") { it.toUByte().toString() } ?: "null"
             }
         }
     }
 
-    // ----- Helper: write CCCD so the server knows we want notifications (Android API version differences) -----
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     @SuppressLint("MissingPermission")
     private fun writeClientConfigValue(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, value: ByteArray) {
@@ -237,7 +251,6 @@ class BleManager(
         }
     }
 
-    // ----- Public BLE controls (called from MainActivity / UI) -----
     @SuppressLint("MissingPermission")
     fun startBleScan() {
         if (!hasScanPermission()) {
@@ -262,11 +275,10 @@ class BleManager(
         (bluetoothLeScanner ?: bluetoothAdapter?.bluetoothLeScanner)?.stopScan(bleScanCallback)
     }
 
-    /** Enable or disable BLE notifications for a characteristic (e.g. ESP32 data stream). */
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     @SuppressLint("MissingPermission")
     fun setNotificationsForCharacteristic(info: CharacteristicInfo, enable: Boolean): Boolean {
-        val gatt = bluetoothGatt ?: return false
+        val gatt = gattByAddress[addrKey(info.deviceAddress)] ?: return false
         val char = gatt.getService(info.serviceUuid)?.getCharacteristic(info.charUuid) ?: return false
         if (char.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY == 0) return false
 
@@ -282,17 +294,20 @@ class BleManager(
         return true
     }
 
-    /** One-off read of a characteristic; result ends up in readValues[uuid] and can be shown in UI. */
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     @SuppressLint("MissingPermission")
-    fun readCharacteristicOnce(charUuid: java.util.UUID, serviceUuid: java.util.UUID) {
-        bluetoothGatt?.getService(serviceUuid)?.getCharacteristic(charUuid)?.let { char ->
-            val ok = bluetoothGatt!!.readCharacteristic(char)
+    fun readCharacteristicOnce(deviceAddress: String, charUuid: UUID, serviceUuid: UUID) {
+        val gatt = gattByAddress[addrKey(deviceAddress)] ?: run {
+            Log.e("BLE", "No GATT for $deviceAddress")
+            return
+        }
+        gatt.getService(serviceUuid)?.getCharacteristic(charUuid)?.let { char ->
+            val ok = gatt.readCharacteristic(char)
             Log.i("BLE", if (ok) "Read initiated" else "Read failed")
         } ?: Log.e("BLE", "Characteristic not found")
     }
 
-    /** Connect to a BLE device by address. Stops scan, clears previous GATT, then connectGatt. */
+    /** Connect to another BLE device; keeps existing connections. */
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     @SuppressLint("MissingPermission")
     fun connectToDevice(address: String) {
@@ -301,24 +316,43 @@ class BleManager(
             return
         }
 
+        val key = addrKey(address)
+        if (gattByAddress.containsKey(key)) {
+            Toast.makeText(activity, "Already connected to this device", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (key in connectingAddresses) {
+            Toast.makeText(activity, "Connection already in progress", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         stopBleScan()
-        bluetoothGatt?.close()
-        bluetoothGatt = null
-        resetCheepSync()
+        connectingAddresses.add(key)
 
         val device = bluetoothAdapter!!.getRemoteDevice(address)
         Handler(Looper.getMainLooper()).postDelayed({
-            bluetoothGatt = device.connectGatt(activity, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            device.connectGatt(activity, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
             Toast.makeText(activity, "Connecting to $address", Toast.LENGTH_SHORT).show()
         }, 750)
     }
 
-    /** Disconnect and close GATT; reset CheepSync state. */
+    /** Disconnect one board by MAC address. */
     @SuppressLint("MissingPermission")
-    fun disconnect() {
-        try { bluetoothGatt?.disconnect() } catch (_: SecurityException) {}
-        try { bluetoothGatt?.close() } catch (_: SecurityException) {}
-        bluetoothGatt = null
-        resetCheepSync()
+    fun disconnectDevice(address: String) {
+        val key = addrKey(address)
+        val gatt = gattByAddress[key] ?: return
+        try {
+            gatt.disconnect()
+        } catch (_: SecurityException) {
+        }
+    }
+
+    /** Disconnect and close all GATT clients. */
+    @SuppressLint("MissingPermission")
+    fun disconnectAll() {
+        for (addr in gattByAddress.keys.toList()) {
+            disconnectDevice(addr)
+        }
+        connectingAddresses.clear()
     }
 }

@@ -1,7 +1,9 @@
 package com.example.ble_sync_suite_app.ui.screens
 
 import com.example.ble_sync_suite_app.CharacteristicInfo
+import com.example.ble_sync_suite_app.ConnectedBoard
 import com.example.ble_sync_suite_app.ESP32_CHAR_UUID
+import com.example.ble_sync_suite_app.readValueKey
 import com.example.ble_sync_suite_app.readValues
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -50,29 +52,33 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-// Screen shown after connecting to a device: latest ESP32 packet, list of characteristics (Read/Notify).
-// Tapping the ESP32 characteristic opens the Sync statistics screen; enabling Notify also opens it.
+// Screen after connecting: merged packet view, characteristics per board, CSV export, add another board.
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DataDisplayScreen(
-    deviceName: String,
+    connectedBoards: List<ConnectedBoard>,
     latestEspPacket: StateFlow<com.example.ble_sync_suite_app.EspPacket?>,
     characteristicInfoList: List<CharacteristicInfo>,
     onBack: () -> Unit,
+    onAddDevice: () -> Unit,
+    onExportCsv: () -> Unit,
     hasConnectPermission: (Context) -> Boolean,
-    readCharacteristicOnce: (UUID, UUID) -> Unit,
+    readCharacteristicOnce: (deviceAddress: String, charUuid: UUID, serviceUuid: UUID) -> Unit,
     setNotificationsForCharacteristic: (CharacteristicInfo, Boolean) -> Boolean,
     onOpenGraph: () -> Unit,
     onNotifyEnabledOpenGraph: (CharacteristicInfo) -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
-    var expandedCharUuid by remember { mutableStateOf<UUID?>(null) }
+    /** Which characteristic row is expanded: UUID + device MAC (same UUID can exist on multiple boards). */
+    var expandedChar by remember { mutableStateOf<Pair<UUID, String>?>(null) }
     val context = LocalContext.current
     val listState = rememberLazyListState()
-    val notificationStates = remember { mutableStateMapOf<UUID, Boolean>() }
+    val notificationStates = remember { mutableStateMapOf<String, Boolean>() }
     val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(1000), label = "fadeIn")
     val latestPacket by latestEspPacket.collectAsState()
+
+    fun notifyKey(info: CharacteristicInfo) = "${info.deviceAddress}|${info.charUuid}"
 
     LaunchedEffect(Unit) {
         visible = true
@@ -85,20 +91,31 @@ fun DataDisplayScreen(
         Box(Modifier.fillMaxWidth()) {
             TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) { Text("Back to Menu") }
             Text(
-                "Connected to $deviceName",
-                fontSize = 24.sp,
+                if (connectedBoards.size <= 1) {
+                    "Connected: ${connectedBoards.firstOrNull()?.name ?: "—"}"
+                } else {
+                    "${connectedBoards.size} boards: " + connectedBoards.joinToString { it.name }
+                },
+                fontSize = 20.sp,
                 textAlign = TextAlign.End,
                 modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(onClick = onAddDevice) { Text("Add device") }
+            Button(onClick = onExportCsv) { Text("Export CSV") }
+        }
         Spacer(Modifier.height(16.dp))
 
-        // Latest packet from ESP32 (seq, tUs, receivedAtNs) — updated as notifications arrive
         if (latestPacket != null) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Color(0xFFE3F2FD), RoundedCornerShape(8.dp)).padding(16.dp)
             ) {
-                Text("ESP32 Latest Packet", fontSize = 18.sp, color = Color.Black)
+                Text("Latest packet (${latestPacket!!.deviceName})", fontSize = 18.sp, color = Color.Black)
                 Spacer(Modifier.height(8.dp))
                 Text("seq: ${latestPacket!!.seq}", fontSize = 14.sp, color = Color.Black)
                 Text("tUs: ${latestPacket!!.tUs}", fontSize = 14.sp, color = Color.Black)
@@ -107,12 +124,11 @@ fun DataDisplayScreen(
             Spacer(Modifier.height(8.dp))
         }
 
-        // List of BLE characteristics: ESP32 char opens sync stats; others expand to show Read/Notify
         LazyColumn(state = listState) {
             items(characteristicInfoList) { info ->
                 val bringIntoViewRequester = remember { BringIntoViewRequester() }
                 val scope = rememberCoroutineScope()
-                val isNotificationActive = notificationStates[info.charUuid] == true
+                val isNotificationActive = notificationStates[notifyKey(info)] == true
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -120,40 +136,42 @@ fun DataDisplayScreen(
                         .clickable {
                             if (info.charUuid == ESP32_CHAR_UUID) onOpenGraph()
                             else {
-                                expandedCharUuid = if (expandedCharUuid == info.charUuid) null else info.charUuid
+                                val key = info.charUuid to info.deviceAddress
+                                expandedChar = if (expandedChar == key) null else key
                                 scope.launch { bringIntoViewRequester.bringIntoView() }
                             }
                         }
                         .padding(16.dp)
                 ) {
+                    Text("${info.deviceName} [${info.deviceAddress}]")
                     Text("Characteristic: ${info.charName}")
                     Text("Properties: ${info.properties}")
                     Text("UUID: ${info.charUuid}", fontSize = 12.sp, color = Color.Gray)
-                    if (expandedCharUuid == info.charUuid) {
+                    if (expandedChar == (info.charUuid to info.deviceAddress)) {
                         Column(Modifier.padding(top = 12.dp)) {
                             Button(onClick = {
-                                // Read once; result appears in readValues and "Last Value" below
                                 if (hasConnectPermission(context)) {
-                                    try { readCharacteristicOnce(info.charUuid, info.serviceUuid) }
-                                    catch (e: SecurityException) {
+                                    try {
+                                        readCharacteristicOnce(info.deviceAddress, info.charUuid, info.serviceUuid)
+                                    } catch (e: SecurityException) {
                                         Log.e("BLE", "Read rejected", e)
                                         Toast.makeText(context, "Unable to read without Bluetooth permission", Toast.LENGTH_SHORT).show()
                                     }
                                 } else Toast.makeText(context, "Bluetooth permission not granted", Toast.LENGTH_SHORT).show()
                             }) { Text("Read") }
                             Button(onClick = {
-                                // Toggle notifications; when enabling for ESP32 char we open sync stats screen
                                 if (!hasConnectPermission(context)) {
                                     Toast.makeText(context, "Bluetooth permission not granted", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 try {
+                                    val key = notifyKey(info)
                                     val updated = if (isNotificationActive) {
-                                        setNotificationsForCharacteristic(info, false).also { if (it) notificationStates[info.charUuid] = false }
+                                        setNotificationsForCharacteristic(info, false).also { if (it) notificationStates[key] = false }
                                     } else {
                                         setNotificationsForCharacteristic(info, true).also {
                                             if (it) {
-                                                notificationStates[info.charUuid] = true
+                                                notificationStates[key] = true
                                                 onNotifyEnabledOpenGraph(info)
                                             }
                                         }
@@ -164,7 +182,10 @@ fun DataDisplayScreen(
                                     Toast.makeText(context, "OS rejected notification request", Toast.LENGTH_SHORT).show()
                                 }
                             }) { Text(if (isNotificationActive) "Stop Notify" else "Notify") }
-                            Text("Last Value: ${readValues[info.charUuid] ?: "—"}", fontSize = 14.sp)
+                            Text(
+                                "Last Value: ${readValues[readValueKey(info.deviceAddress, info.charUuid)] ?: "—"}",
+                                fontSize = 14.sp
+                            )
                         }
                     }
                 }

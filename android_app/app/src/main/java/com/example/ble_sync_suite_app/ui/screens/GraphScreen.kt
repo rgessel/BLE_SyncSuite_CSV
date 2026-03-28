@@ -2,6 +2,7 @@ package com.example.ble_sync_suite_app.ui.screens
 
 import com.example.ble_sync_suite_app.EspPacket
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,11 +14,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,18 +34,36 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.abs
 
-// Sync statistics screen: shows CheepSync fit (alpha, beta, skew), residuals, packet stats, transmission rate, time spans.
-// Opened by tapping the ESP32 characteristic or enabling Notify on it. No graph drawing — stats only.
+// Sync statistics: CheepSync fit per board; pick a board when multiple connections are active.
 
 @Composable
 fun GraphScreen(
     onBack: () -> Unit,
     packets: List<EspPacket>,
-    cheepSyncAlpha: StateFlow<Double>,
-    cheepSyncBeta: StateFlow<Double>
+    cheepSyncAlphaByDevice: StateFlow<Map<String, Double>>,
+    cheepSyncBetaByDevice: StateFlow<Map<String, Double>>
 ) {
-    val alpha by cheepSyncAlpha.collectAsState()
-    val beta by cheepSyncBeta.collectAsState()
+    val alphaMap by cheepSyncAlphaByDevice.collectAsState()
+    val betaMap by cheepSyncBetaByDevice.collectAsState()
+
+    val devices = remember(packets) {
+        packets.map { it.deviceAddress }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+    var selectedDevice by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(devices) {
+        if (selectedDevice.isNullOrBlank() || selectedDevice !in devices) {
+            selectedDevice = devices.firstOrNull()
+        }
+    }
+
+    val filtered = remember(packets, selectedDevice) {
+        val sel = selectedDevice
+        if (sel.isNullOrBlank()) packets
+        else packets.filter { it.deviceAddress == sel }
+    }
+
+    val alpha = selectedDevice?.let { alphaMap[it] } ?: 0.0
+    val beta = selectedDevice?.let { betaMap[it] } ?: 1.0
 
     Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
         Row(
@@ -51,16 +76,35 @@ fun GraphScreen(
         }
         Spacer(Modifier.height(16.dp))
 
-        if (packets.isEmpty()) {
+        if (devices.size > 1) {
+            var menuExpanded by remember { mutableStateOf(false) }
+            Box(Modifier.fillMaxWidth()) {
+                TextButton(onClick = { menuExpanded = true }) {
+                    Text("Board: ${selectedDevice ?: "—"}")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    devices.forEach { addr ->
+                        DropdownMenuItem(
+                            text = { Text(addr) },
+                            onClick = {
+                                selectedDevice = addr
+                                menuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (filtered.isEmpty()) {
             Text("No data yet. Waiting for ESP32 packets...", color = Color.Gray)
             return@Column
         }
 
-        // Need at least 2 packets to compute fit-based stats
-        if (packets.size >= 2) {
-            val first = packets.first()
-            // Residual = actual receive time minus (alpha + beta * tb) in ms
-            val residualsMs = packets.map { p ->
+        if (filtered.size >= 2) {
+            val first = filtered.first()
+            val residualsMs = filtered.map { p ->
                 val Tr = p.receivedAtNs.toDouble()
                 val tb = p.tUs * 1000.0
                 (Tr - (alpha + beta * tb)) / 1_000_000.0
@@ -68,26 +112,26 @@ fun GraphScreen(
             val meanAbsResidualMs = residualsMs.map { abs(it) }.average()
             val latestResidualMs = residualsMs.last()
             val clockSkew = beta - 1.0
-            // Count sequence gaps (missing packets)
             val droppedPacketCount = run {
                 var valid = 1
-                for (i in 1 until packets.size) {
-                    val prev = packets[i - 1].seq
-                    val curr = packets[i].seq
+                for (i in 1 until filtered.size) {
+                    val prev = filtered[i - 1].seq
+                    val curr = filtered[i].seq
                     if (curr == prev + 1L || (prev == 0xFFFF_FFFFL && curr == 0L)) valid++
                 }
-                packets.size - valid
+                filtered.size - valid
             }
-            val intervalsUs = (1 until packets.size).map { packets[it].tUs - packets[it - 1].tUs }.filter { it > 0 }
+            val intervalsUs = (1 until filtered.size).map { filtered[it].tUs - filtered[it - 1].tUs }.filter { it > 0 }
             val transmissionRateMs = if (intervalsUs.isNotEmpty()) intervalsUs.map { it.toDouble() }.average() / 1000.0 else 0.0
-            val latest = packets.last()
+            val latest = filtered.last()
             val tUsDeltaMs = (latest.tUs - first.tUs) / 1000.0
             val rxDeltaMs = (latest.receivedAtNs - first.receivedAtNs) / 1_000_000.0
 
-            // Scrollable stats block: fit, residuals, packet count, rate, time spans
             Column(
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).background(Color(0xFF111111), RoundedCornerShape(8.dp)).padding(12.dp)
             ) {
+                selectedDevice?.let { Text("Device: $it", fontSize = 12.sp, color = Color(0xFFB0BEC5)) }
+                Spacer(Modifier.height(8.dp))
                 Text("CheepSync Fit Metrics:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Text("  alpha (ns): ${"%.0f".format(alpha)}", fontSize = 12.sp, color = Color.White)
                 Text("  beta (unitless): ${"%.9f".format(beta)}", fontSize = 12.sp, color = Color.White)
@@ -98,7 +142,7 @@ fun GraphScreen(
                 Text("  Latest residual: ${"%.3f".format(latestResidualMs)} ms", fontSize = 12.sp, color = Color.White)
                 Spacer(Modifier.height(8.dp))
                 Text("Packet Statistics:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("  Total packets: ${packets.size}", fontSize = 12.sp, color = Color.White)
+                Text("  Total packets: ${filtered.size}", fontSize = 12.sp, color = Color.White)
                 Text("  Dropped packets (seq gaps): $droppedPacketCount", fontSize = 12.sp, color = Color.White)
                 Spacer(Modifier.height(8.dp))
                 Text("Transmission Rate:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)

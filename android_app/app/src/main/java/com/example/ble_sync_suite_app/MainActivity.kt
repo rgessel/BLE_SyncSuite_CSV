@@ -5,6 +5,7 @@ package com.example.ble_sync_suite_app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -33,7 +34,6 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
 
-    // ----- Screen navigation: which screen is visible (one of these true at a time, except welcome) -----
     private var showWelcomeScreen by mutableStateOf(true)
     private var showMainMenu by mutableStateOf(false)
     private var showScannerScreen by mutableStateOf(false)
@@ -43,15 +43,14 @@ class MainActivity : ComponentActivity() {
     private var startScanWhenPermissionGranted = false
     private var isScanning by mutableStateOf(false)
     private var searchQuery by mutableStateOf("")
-    private var connectedDeviceName by mutableStateOf("")
     private val scannedDevices: SnapshotStateList<String> = mutableStateListOf()
+    private val connectedBoards: SnapshotStateList<ConnectedBoard> = mutableStateListOf()
     private val characteristicInfoList = mutableStateListOf<CharacteristicInfo>()
-    /** Kept for the Sync statistics screen (GraphScreen); capped at 1000. */
+    /** All boards merged; capped at 5000 rows for memory. */
     private val esp32PacketHistory = mutableStateListOf<EspPacket>()
     private val _latestEspPacket = kotlinx.coroutines.flow.MutableStateFlow<EspPacket?>(null)
     val latestEspPacket = _latestEspPacket.asStateFlow()
 
-    /** Android 12+ needs explicit BLUETOOTH_SCAN / BLUETOOTH_CONNECT. */
     private val isAtLeastS get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     private fun permissionsToRequest(): Array<String> {
         val required = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -65,7 +64,6 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var bleManager: BleManager
 
-    /** If user had asked to scan before permission was granted, start scan after grant. */
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         if (results.any { !it.value }) {
             Toast.makeText(this, "Some permissions were denied.", Toast.LENGTH_LONG).show()
@@ -78,6 +76,17 @@ class MainActivity : ComponentActivity() {
                 bleManager.startBleScan()
             } else startScanWhenPermissionGranted = false
         }
+    }
+
+    private fun addrKey(addr: String) = addr.uppercase()
+
+    @SuppressLint("MissingPermission")
+    private fun shareMergedCsv() {
+        val intent = CsvExport.buildShareIntent(this, esp32PacketHistory.toList()) ?: run {
+            Toast.makeText(this, "Could not create CSV", Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(Intent.createChooser(intent, "Export BLE sync CSV"))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,43 +105,56 @@ class MainActivity : ComponentActivity() {
             hasScanPermission = { hasScanPermission() },
             hasConnectPermission = { hasConnectPermission() },
             onDeviceFound = { display -> if (!scannedDevices.contains(display)) scannedDevices.add(display) },
-            onConnected = { name ->
-                connectedDeviceName = name
+            onConnected = { name, address ->
+                val board = ConnectedBoard(name, address)
+                if (connectedBoards.none { addrKey(it.address) == addrKey(address) }) {
+                    connectedBoards.add(board)
+                }
                 showScannerScreen = false
                 showDataScreen = true
             },
-            onDisconnected = {
-                isScanning = false
-                showDataScreen = false
-                showGraphScreen = false
-                showScannerScreen = false
-                showMainMenu = true
+            onDisconnected = { address ->
+                val key = addrKey(address)
+                val removed = connectedBoards.removeAll { addrKey(it.address) == key }
+                if (removed) {
+                    characteristicInfoList.removeAll { addrKey(it.deviceAddress) == key }
+                    if (connectedBoards.isEmpty()) {
+                        isScanning = false
+                        showDataScreen = false
+                        showGraphScreen = false
+                        showScannerScreen = false
+                        showMainMenu = true
+                    }
+                }
             },
             onCharacteristicsDiscovered = { list ->
-                characteristicInfoList.clear()
-                characteristicInfoList.addAll(list)
+                if (list.isNotEmpty()) {
+                    val key = addrKey(list.first().deviceAddress)
+                    characteristicInfoList.removeAll { addrKey(it.deviceAddress) == key }
+                    characteristicInfoList.addAll(list)
+                }
             },
             onPacketReceived = { packet ->
                 _latestEspPacket.value = packet
                 esp32PacketHistory.add(packet)
-                if (esp32PacketHistory.size > 1000) esp32PacketHistory.removeAt(0)
+                if (esp32PacketHistory.size > 5000) esp32PacketHistory.removeAt(0)
             }
         )
 
-        // Compose UI: single when over which screen to show (order matters; first match wins)
         setContent {
             BleSyncSuiteAppTheme {
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                    val connectedAddresses = connectedBoards.map { addrKey(it.address) }.toSet()
                     when {
                         showWelcomeScreen -> WelcomeScreen { showWelcomeScreen = false; showMainMenu = true }
                         showGraphScreen -> GraphScreen(
                             onBack = { showGraphScreen = false },
                             packets = esp32PacketHistory.toList(),
-                            cheepSyncAlpha = bleManager.cheepSyncAlpha,
-                            cheepSyncBeta = bleManager.cheepSyncBeta
+                            cheepSyncAlphaByDevice = bleManager.cheepSyncAlphaByDevice,
+                            cheepSyncBetaByDevice = bleManager.cheepSyncBetaByDevice
                         )
                         showDataScreen -> DataDisplayScreen(
-                            deviceName = connectedDeviceName,
+                            connectedBoards = connectedBoards.toList(),
                             latestEspPacket = latestEspPacket,
                             characteristicInfoList = characteristicInfoList,
                             onBack = {
@@ -140,17 +162,32 @@ class MainActivity : ComponentActivity() {
                                 showGraphScreen = false
                                 if (hasScanPermission()) bleManager.stopBleScan()
                                 isScanning = false
-                                bleManager.disconnect()
+                                bleManager.disconnectAll()
+                                connectedBoards.clear()
+                                characteristicInfoList.clear()
+                                esp32PacketHistory.clear()
+                                _latestEspPacket.value = null
                                 showMainMenu = true
                             },
+                            onAddDevice = {
+                                showDataScreen = false
+                                showScannerScreen = true
+                            },
+                            onExportCsv = { shareMergedCsv() },
                             hasConnectPermission = { context -> this@MainActivity.hasConnectPermission(context) },
-                            readCharacteristicOnce = { charUuid, serviceUuid ->
-                                try { bleManager.readCharacteristicOnce(charUuid, serviceUuid) }
-                                catch (e: SecurityException) { Log.e("BLE", "Read rejected", e) }
+                            readCharacteristicOnce = { deviceAddress, charUuid, serviceUuid ->
+                                try {
+                                    bleManager.readCharacteristicOnce(deviceAddress, charUuid, serviceUuid)
+                                } catch (e: SecurityException) {
+                                    Log.e("BLE", "Read rejected", e)
+                                }
                             },
                             setNotificationsForCharacteristic = { info, enable ->
-                                try { bleManager.setNotificationsForCharacteristic(info, enable) }
-                                catch (e: SecurityException) { Log.e("BLE", "Notify rejected", e); false }
+                                try {
+                                    bleManager.setNotificationsForCharacteristic(info, enable)
+                                } catch (e: SecurityException) {
+                                    Log.e("BLE", "Notify rejected", e); false
+                                }
                             },
                             onOpenGraph = { showGraphScreen = true },
                             onNotifyEnabledOpenGraph = { _ -> showGraphScreen = true }
@@ -159,7 +196,14 @@ class MainActivity : ComponentActivity() {
                             isScanning = isScanning,
                             searchQuery = searchQuery,
                             scannedDevices = scannedDevices,
-                            onBack = { bleManager.stopBleScan(); isScanning = false; showScannerScreen = false; showMainMenu = true },
+                            connectedAddresses = connectedAddresses,
+                            onBack = {
+                                bleManager.stopBleScan()
+                                isScanning = false
+                                showScannerScreen = false
+                                if (connectedBoards.isNotEmpty()) showDataScreen = true
+                                else showMainMenu = true
+                            },
                             onScanToggle = { toggled ->
                                 if (toggled) {
                                     scannedDevices.clear()
@@ -179,7 +223,6 @@ class MainActivity : ComponentActivity() {
                                 if (hasConnectPermission()) {
                                     try {
                                         bleManager.connectToDevice(address)
-                                        connectedDeviceName = name
                                     } catch (e: SecurityException) {
                                         Log.e("BLE", "Connect rejected", e)
                                         Toast.makeText(this, "Unable to connect without Bluetooth permission", Toast.LENGTH_SHORT).show()
@@ -196,14 +239,12 @@ class MainActivity : ComponentActivity() {
         requestPermissionsModernWay()
     }
 
-    /** Request any missing permissions; show toast if all already granted. */
     private fun requestPermissionsModernWay() {
         val needed = permissionsToRequest().filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())
         else Toast.makeText(this, "All permissions already granted!", Toast.LENGTH_SHORT).show()
     }
 
-    /** If we have scan permission, run callback; else request permission and set flag to start scan when granted. */
     private fun ensureScanPermission(onGranted: () -> Unit) {
         if (!isAtLeastS || hasScanPermission()) onGranted()
         else {

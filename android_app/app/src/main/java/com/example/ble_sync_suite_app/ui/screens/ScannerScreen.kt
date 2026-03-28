@@ -59,6 +59,8 @@ fun MainScannerScreen(
     isScanning: Boolean,
     searchQuery: String,
     scannedDevices: List<String>,
+    /** MAC addresses (any case) already connected — shown in the list. */
+    connectedAddresses: Set<String> = emptySet(),
     onBack: () -> Unit,
     onScanToggle: (Boolean) -> Unit,
     onQueryChanged: (String) -> Unit,
@@ -75,8 +77,9 @@ fun MainScannerScreen(
             items(filtered) { deviceInfo ->
                 val address = deviceInfo.substringAfter("[").substringBefore("]")
                 val name = deviceInfo.substringBefore(" [")
+                val connected = connectedAddresses.any { it.equals(address, ignoreCase = true) }
                 Text(
-                    text = deviceInfo,
+                    text = if (connected) "$deviceInfo  ✓ connected" else deviceInfo,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(16.dp).clickable { onDeviceClick(address, name) }
                 )

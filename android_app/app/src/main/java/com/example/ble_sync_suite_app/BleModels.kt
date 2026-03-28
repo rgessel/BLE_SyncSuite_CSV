@@ -12,8 +12,14 @@ import java.util.UUID
 data class EspPacket(
     val seq: Long,
     val tUs: Long,
-    val receivedAtNs: Long
+    val receivedAtNs: Long,
+    /** BLE MAC of the board that sent this packet (normalized uppercase). */
+    val deviceAddress: String = "",
+    val deviceName: String = ""
 )
+
+/** A board currently connected over BLE (name + MAC). */
+data class ConnectedBoard(val name: String, val address: String)
 
 /** BLE characteristic metadata for UI (service/char UUID, name, properties string). */
 data class CharacteristicInfo(
@@ -21,7 +27,9 @@ data class CharacteristicInfo(
     val serviceName: String,
     val charUuid: UUID,
     val charName: String,
-    val properties: String
+    val properties: String,
+    val deviceAddress: String = "",
+    val deviceName: String = ""
 )
 
 // ----- Android permissions (Android 12+) -----
@@ -50,8 +58,11 @@ val standardCharacteristicNames = mapOf(
     UUID.fromString("00002A19-0000-1000-8000-00805f9b34fb") to "Battery Level"
 )
 
-/** Last read value per characteristic UUID (for UI "Read" button). */
-val readValues = mutableStateMapOf<UUID, String>()
+/** Last read value per device + characteristic (for UI "Read" button). Key: [readValueKey]. */
+val readValues = mutableStateMapOf<String, String>()
+
+fun readValueKey(deviceAddress: String, charUuid: UUID): String =
+    "${deviceAddress.uppercase()}|${charUuid}"
 
 // ----- Byte parsing (little-endian) -----
 /** Read 4 bytes as unsigned 32-bit little-endian. */
