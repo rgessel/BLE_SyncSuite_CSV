@@ -46,6 +46,7 @@ class BleManager(
     private val gattByAddress = mutableMapOf<String, BluetoothGatt>()
     private val cheepSyncByAddress = mutableMapOf<String, CheepSync>()
     private val connectingAddresses = mutableSetOf<String>()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val _cheepSyncAlphaByDevice = MutableStateFlow<Map<String, Double>>(emptyMap())
     val cheepSyncAlphaByDevice: StateFlow<Map<String, Double>> = _cheepSyncAlphaByDevice.asStateFlow()
@@ -140,6 +141,10 @@ class BleManager(
                         onConnected(name, address)
                     }
                     gatt.requestMtu(247)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        @SuppressLint("MissingPermission")
+                        gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                    }
                     gatt.discoverServices()
                 }
 
@@ -169,16 +174,20 @@ class BleManager(
             val devName = gatt.device.name ?: "Unnamed"
 
             try {
-                val packet = EspPacket(
+                val raw = EspPacket(
                     seq = u32LE(value, 0),
                     tUs = u64LE(value, 4),
                     receivedAtNs = SystemClock.elapsedRealtimeNanos(),
                     deviceAddress = address,
                     deviceName = devName
                 )
-
-                updateCheepSync(packet)
-
+                updateCheepSync(raw)
+                val cs = cheepSyncByAddress[address]!!
+                val packet = raw.copy(
+                    syncedAtNs = cs.mapBeaconToReceiverNs(raw.tUs),
+                    cheepSyncAlphaNs = cs.alpha,
+                    cheepSyncBeta = cs.beta
+                )
                 activity.runOnUiThread { onPacketReceived(packet) }
             } catch (e: Exception) {
                 Log.e("ESP32", "Decode error", e)
@@ -354,5 +363,43 @@ class BleManager(
             disconnectDevice(addr)
         }
         connectingAddresses.clear()
+    }
+
+    /**
+     * Briefly disables notifications on all connections, waits [stallAfterDisableMs], then re-enables.
+     * ESP firmware resets its 1 Hz notify/LED phase on each re-enable so boards blink together without
+     * extra write characteristics — only CCCD toggles.
+     */
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
+    fun resyncLedBlinkPhases(stallAfterDisableMs: Long = 220L) {
+        if (!hasConnectPermission()) return
+        val addresses = gattByAddress.keys.toList()
+        if (addresses.size < 2) return
+
+        for (addr in addresses) {
+            val gatt = gattByAddress[addr] ?: continue
+            val char = gatt.getService(ESP32_SERVICE_UUID)?.getCharacteristic(ESP32_CHAR_UUID) ?: continue
+            if (char.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY == 0) continue
+            gatt.setCharacteristicNotification(char, false)
+            char.getDescriptor(CLIENT_CONFIG_DESCRIPTOR_UUID)?.let { desc ->
+                writeClientConfigValue(gatt, desc, BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE)
+            }
+        }
+
+        mainHandler.postDelayed({
+            for (addr in addresses) {
+                val gatt = gattByAddress[addr] ?: continue
+                val char = gatt.getService(ESP32_SERVICE_UUID)?.getCharacteristic(ESP32_CHAR_UUID) ?: continue
+                if (char.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY == 0) continue
+                gatt.setCharacteristicNotification(char, true)
+                char.getDescriptor(CLIENT_CONFIG_DESCRIPTOR_UUID)?.let { desc ->
+                    writeClientConfigValue(gatt, desc, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                }
+            }
+            activity.runOnUiThread {
+                Toast.makeText(activity, "LED notify phases re-aligned", Toast.LENGTH_SHORT).show()
+            }
+        }, stallAfterDisableMs)
     }
 }

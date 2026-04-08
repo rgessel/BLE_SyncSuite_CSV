@@ -60,6 +60,8 @@ fun DataDisplayScreen(
     connectedBoards: List<ConnectedBoard>,
     latestEspPacket: StateFlow<com.example.ble_sync_suite_app.EspPacket?>,
     characteristicInfoList: List<CharacteristicInfo>,
+    /** CCCD off → stall → on all boards so ESP LEDs share the same 1 Hz phase (no extra GATT payload). */
+    onSyncLedPhases: () -> Unit,
     onBack: () -> Unit,
     onAddDevice: () -> Unit,
     onExportCsv: () -> Unit,
@@ -108,6 +110,9 @@ fun DataDisplayScreen(
         ) {
             Button(onClick = onAddDevice) { Text("Add device") }
             Button(onClick = onExportCsv) { Text("Export CSV") }
+            if (connectedBoards.size >= 2) {
+                Button(onClick = onSyncLedPhases) { Text("Sync LED phases") }
+            }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -120,6 +125,8 @@ fun DataDisplayScreen(
                 Text("seq: ${latestPacket!!.seq}", fontSize = 14.sp, color = Color.Black)
                 Text("tUs: ${latestPacket!!.tUs}", fontSize = 14.sp, color = Color.Black)
                 Text("receivedAtNs: ${latestPacket!!.receivedAtNs}", fontSize = 14.sp, color = Color.Black)
+                Text("syncedAtNs (CheepSync): ${latestPacket!!.syncedAtNs}", fontSize = 14.sp, color = Color.Black)
+                Text("CheepSync α (ns): ${latestPacket!!.cheepSyncAlphaNs}  β: ${latestPacket!!.cheepSyncBeta}", fontSize = 14.sp, color = Color.Black)
             }
             Spacer(Modifier.height(8.dp))
         }

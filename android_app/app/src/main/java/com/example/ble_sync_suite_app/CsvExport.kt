@@ -20,10 +20,14 @@ object CsvExport {
                     escapeCsv(p.deviceName),
                     p.seq.toString(),
                     p.tUs.toString(),
-                    p.receivedAtNs.toString()
+                    p.receivedAtNs.toString(),
+                    p.syncedAtNs.toString(),
+                    p.cheepSyncAlphaNs.toString(),
+                    p.cheepSyncBeta.toString()
                 ).joinToString(",")
             }
-        val header = "device_address,device_name,seq,t_us,received_at_ns"
+        val header =
+            "device_address,device_name,seq,t_us,received_at_ns,synced_at_ns,cheep_sync_alpha_ns,cheep_sync_beta"
         return (listOf(header) + rows).joinToString("\n")
     }
 

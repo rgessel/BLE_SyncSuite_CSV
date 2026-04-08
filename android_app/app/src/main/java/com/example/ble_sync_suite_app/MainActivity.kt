@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -63,6 +65,9 @@ class MainActivity : ComponentActivity() {
         !isAtLeastS || ContextCompat.checkSelfPermission(this, PERMISSION_BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
 
     private lateinit var bleManager: BleManager
+    private val mainHandler = Handler(Looper.getMainLooper())
+    /** Last [connectedBoards.size] we ran auto LED phase resync for (avoid duplicate toasts; re-run when count changes). */
+    private var lastLedResyncForBoardCount: Int = 0
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         if (results.any { !it.value }) {
@@ -132,6 +137,16 @@ class MainActivity : ComponentActivity() {
                     val key = addrKey(list.first().deviceAddress)
                     characteristicInfoList.removeAll { addrKey(it.deviceAddress) == key }
                     characteristicInfoList.addAll(list)
+                    if (connectedBoards.size >= 2 && connectedBoards.size != lastLedResyncForBoardCount) {
+                        lastLedResyncForBoardCount = connectedBoards.size
+                        mainHandler.postDelayed({
+                            try {
+                                bleManager.resyncLedBlinkPhases(stallAfterDisableMs = 220L)
+                            } catch (e: SecurityException) {
+                                Log.e("BLE", "LED phase resync rejected", e)
+                            }
+                        }, 400L)
+                    }
                 }
             },
             onPacketReceived = { packet ->
@@ -157,6 +172,15 @@ class MainActivity : ComponentActivity() {
                             connectedBoards = connectedBoards.toList(),
                             latestEspPacket = latestEspPacket,
                             characteristicInfoList = characteristicInfoList,
+                            onSyncLedPhases = {
+                                if (hasConnectPermission()) {
+                                    try {
+                                        bleManager.resyncLedBlinkPhases(stallAfterDisableMs = 220L)
+                                    } catch (e: SecurityException) {
+                                        Log.e("BLE", "LED phase resync rejected", e)
+                                    }
+                                } else Toast.makeText(this@MainActivity, "Bluetooth permission not granted", Toast.LENGTH_SHORT).show()
+                            },
                             onBack = {
                                 showDataScreen = false
                                 showGraphScreen = false
@@ -167,6 +191,7 @@ class MainActivity : ComponentActivity() {
                                 characteristicInfoList.clear()
                                 esp32PacketHistory.clear()
                                 _latestEspPacket.value = null
+                                lastLedResyncForBoardCount = 0
                                 showMainMenu = true
                             },
                             onAddDevice = {

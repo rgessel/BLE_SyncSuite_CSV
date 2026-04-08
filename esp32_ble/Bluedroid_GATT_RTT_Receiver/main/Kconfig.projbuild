@@ -1,0 +1,20 @@
+menu "RTT Receiver LED (WS2812)"
+
+    orsource "$IDF_PATH/examples/common_components/env_caps/$IDF_TARGET/Kconfig.env_caps"
+
+    choice RTT_LED_STRIP_BACKEND
+        prompt "LED strip backend"
+        default RTT_LED_STRIP_BACKEND_RMT if SOC_RMT_SUPPORTED
+        default RTT_LED_STRIP_BACKEND_SPI
+        help
+            RMT is typical for ESP32 / ESP32-S3 devkits. Use SPI if RMT is unavailable.
+
+        config RTT_LED_STRIP_BACKEND_RMT
+            depends on SOC_RMT_SUPPORTED
+            bool "RMT"
+
+        config RTT_LED_STRIP_BACKEND_SPI
+            bool "SPI"
+    endchoice
+
+endmenu

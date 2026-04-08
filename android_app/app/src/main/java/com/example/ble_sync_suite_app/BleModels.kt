@@ -15,7 +15,16 @@ data class EspPacket(
     val receivedAtNs: Long,
     /** BLE MAC of the board that sent this packet (normalized uppercase). */
     val deviceAddress: String = "",
-    val deviceName: String = ""
+    val deviceName: String = "",
+    /**
+     * Beacon time mapped to the phone monotonic timeline (ns) via CheepSync: Tr ≈ α + β×t_beacon_ns.
+     * Snapshot taken immediately after this sample updates the per-device fit.
+     */
+    val syncedAtNs: Long = 0L,
+    /** CheepSync α (offset, ns) after processing this sample. */
+    val cheepSyncAlphaNs: Double = 0.0,
+    /** CheepSync β (skew) after processing this sample. */
+    val cheepSyncBeta: Double = 1.0
 )
 
 /** A board currently connected over BLE (name + MAC). */

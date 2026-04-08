@@ -16,6 +16,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
@@ -70,6 +71,8 @@ static uint8_t adv_config_done = 0;
 
 static bool sensor_ready = false;
 static bool notify_enabled = false;
+/** Set when CCCD enables notifications so the 1 Hz task restarts its period from that moment (multi-board LED alignment). */
+static volatile bool phase_resync_requested = false;
 
 static esp_gatt_if_t g_gatts_if = ESP_GATT_IF_NONE;
 static uint16_t g_conn_id = 0xFFFF;
@@ -170,6 +173,12 @@ static void sensor_notify_task(void *param)
 
     while (1) {
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SENSOR_PERIOD_MS));
+
+        if (phase_resync_requested) {
+            phase_resync_requested = false;
+            last_wake = xTaskGetTickCount();
+            continue;
+        }
 
         if (!sensor_ready || !notify_enabled || g_gatts_if == ESP_GATT_IF_NONE) {
             continue;
@@ -358,6 +367,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 
             if (cccd == 0x0001) {
                 notify_enabled = true;
+                phase_resync_requested = true;
                 ESP_LOGI(TAG, "Notifications ENABLED");
             } else if (cccd == 0x0000) {
                 notify_enabled = false;
