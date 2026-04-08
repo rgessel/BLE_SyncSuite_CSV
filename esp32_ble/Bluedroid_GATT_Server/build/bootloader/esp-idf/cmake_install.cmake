@@ -1,8 +1,8 @@
-# Install script for directory: C:/Users/burke/esp/v5.4.1/esp-idf
+# Install script for directory: /Users/ryangessel/esp/esp-idf
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/bootloader")
+  set(CMAKE_INSTALL_PREFIX "/usr/local")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -34,111 +34,117 @@ endif()
 
 # Set path to fallback-tool for dependency-resolution.
 if(NOT DEFINED CMAKE_OBJDUMP)
-  set(CMAKE_OBJDUMP "C:/Users/burke/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20241119/xtensa-esp-elf/bin/xtensa-esp32-elf-objdump.exe")
+  set(CMAKE_OBJDUMP "/Users/ryangessel/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-esp-elf/bin/xtensa-esp32-elf-objdump")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/xtensa/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/xtensa/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/newlib/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/newlib/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/soc/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/soc/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/micro-ecc/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/micro-ecc/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/hal/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/hal/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/spi_flash/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/spi_flash/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_bootloader_format/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_bootloader_format/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_app_format/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_app_format/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/bootloader_support/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/bootloader_support/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/efuse/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/efuse/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_security/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_security/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_system/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_system/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_hw_support/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_hw_support/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_common/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_common/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_rom/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esp_rom/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/log/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/log/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esptool_py/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/esptool_py/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/partition_table/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/partition_table/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/bootloader/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/bootloader/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/freertos/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/freertos/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/main/cmake_install.cmake")
+  include("/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/main/cmake_install.cmake")
 endif()
 
+string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
+       "${CMAKE_INSTALL_MANIFEST_FILES}")
+if(CMAKE_INSTALL_LOCAL_ONLY)
+  file(WRITE "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/esp-idf/install_local_manifest.txt"
+     "${CMAKE_INSTALL_MANIFEST_CONTENT}")
+endif()

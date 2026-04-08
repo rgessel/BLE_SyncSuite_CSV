@@ -1,0 +1,2 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/Users/ryangessel/.espressif/python_env/idf5.5_py3.12_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=0 /Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server
+info: Trying to set symbol EXAMPLE_BLINK_LED_STRIP to n, but it is currently selected by choice EXAMPLE_BLINK_LED. For setting it to n, set another choice symbol to y instead.
