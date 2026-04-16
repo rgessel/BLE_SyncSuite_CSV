@@ -520,15 +520,15 @@ static void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_
         break;
 
     case ESP_GATTC_SEARCH_RES_EVT: {
-        esp_gatt_srvc_id_t *sid = &param->search_res.srvc_id;
-        if (sid->id.uuid.len == ESP_UUID_LEN_128 &&
-            uuid128_eq(tof_rx_svc_uuid128, &sid->id.uuid)) {
+        esp_bt_uuid_t *svc_uuid = &param->search_res.srvc_id.uuid;
+        if (svc_uuid->len == ESP_UUID_LEN_128 &&
+            uuid128_eq(tof_rx_svc_uuid128, svc_uuid)) {
             s_rx_start = param->search_res.start_handle;
             s_rx_end = param->search_res.end_handle;
             s_have_rx_range = true;
             ESP_LOGI(TAG, "Found RX svc hdl [%u,%u]", s_rx_start, s_rx_end);
-        } else if (sid->id.uuid.len == ESP_UUID_LEN_128 &&
-                   uuid128_eq(tof_echo_svc_uuid128, &sid->id.uuid)) {
+        } else if (svc_uuid->len == ESP_UUID_LEN_128 &&
+                   uuid128_eq(tof_echo_svc_uuid128, svc_uuid)) {
             s_echo_start = param->search_res.start_handle;
             s_echo_end = param->search_res.end_handle;
             s_have_echo_range = true;
