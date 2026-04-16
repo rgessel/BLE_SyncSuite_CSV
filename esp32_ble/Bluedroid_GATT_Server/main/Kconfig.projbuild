@@ -1,5 +1,18 @@
 menu "Example 'GATT SERVER' Config"
 
+    choice TOF_DEVICE_ROLE
+        prompt "Time-of-flight (BLE RTT) device role"
+        default TOF_ROLE_RECEIVER
+        help
+            Build and flash RECEIVER on 00:70:07:29:92:2E (peripheral, LED blinks on packet).
+            Build and flash TRANSMITTER on 00:70:07:29:92:36 (central, writes every 1 s, logs RTT).
+
+        config TOF_ROLE_RECEIVER
+            bool "Receiver (GATT server, two services)"
+        config TOF_ROLE_TRANSMITTER
+            bool "Transmitter (GATT client)"
+    endchoice
+
     config EXAMPLE_SET_RAW_ADV_DATA
         bool "Use raw data for advertising packets and scan response data"
         help
