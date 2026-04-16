@@ -43,10 +43,10 @@
 // Compile only the constants needed for the selected role.
 // ---------------------------------------------------------------------------
 #if CONFIG_TOF_ROLE_TRANSMITTER
-static const esp_bd_addr_t k_receiver_bda = {0x2E, 0x92, 0x29, 0x07, 0x70, 0x00};
+static const esp_bd_addr_t k_receiver_bda = {0x2C, 0x92, 0x29, 0x07, 0x70, 0x00};
 #endif
 #if CONFIG_TOF_ROLE_RECEIVER
-static const esp_bd_addr_t k_transmitter_bda = {0x36, 0x92, 0x29, 0x07, 0x70, 0x00};
+static const esp_bd_addr_t k_transmitter_bda = {0x34, 0x92, 0x29, 0x07, 0x70, 0x00};
 #endif
 
 // 128-bit UUIDs (same byte order as other ESP-IDF 128-bit examples)
