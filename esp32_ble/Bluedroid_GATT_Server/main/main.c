@@ -33,9 +33,48 @@
 #include "esp_bt_defs.h"
 #include "esp_bt_main.h"
 #include "esp_gatt_common_api.h"
+#include "driver/gpio.h"
 
 #if CONFIG_TOF_ROLE_RECEIVER
 #include "led_strip.h"
+#endif
+
+// Scope probe outputs (Analog Discovery 2 / logic analyzer): common GND to both ESP32s and AD2.
+// Transmitter: high from issue of GATT write until write-response callback (~ATT RTT on that board).
+// Receiver: brief high while handling the RX-characteristic write (marks packet arrival on peer).
+// Edge TX↑ → RX↑ is not "RF time of flight" alone; it includes stacks and scheduling (often ms unless
+// connection interval is short). Change pins if they conflict with your module (flash/strapping, etc.).
+#define TOF_SCOPE_GPIO_TX  4
+#define TOF_SCOPE_GPIO_RX  5
+
+#if CONFIG_TOF_ROLE_TRANSMITTER
+static void tof_scope_gpio_init_tx(void)
+{
+    gpio_config_t io = {
+        .pin_bit_mask = 1ULL << TOF_SCOPE_GPIO_TX,
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&io));
+    gpio_set_level(TOF_SCOPE_GPIO_TX, 0);
+}
+#endif
+
+#if CONFIG_TOF_ROLE_RECEIVER
+static void tof_scope_gpio_init_rx(void)
+{
+    gpio_config_t io = {
+        .pin_bit_mask = 1ULL << TOF_SCOPE_GPIO_RX,
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&io));
+    gpio_set_level(TOF_SCOPE_GPIO_RX, 0);
+}
 #endif
 
 // ---------------------------------------------------------------------------
@@ -43,10 +82,10 @@
 // Compile only the constants needed for the selected role.
 // ---------------------------------------------------------------------------
 #if CONFIG_TOF_ROLE_TRANSMITTER
-static const esp_bd_addr_t k_receiver_bda = {0x2C, 0x92, 0x29, 0x07, 0x70, 0x00};
+static const esp_bd_addr_t k_receiver_bda = {0x00, 0x70, 0x07, 0x29, 0x92, 0x2E};
 #endif
 #if CONFIG_TOF_ROLE_RECEIVER
-static const esp_bd_addr_t k_transmitter_bda = {0x34, 0x92, 0x29, 0x07, 0x70, 0x00};
+static const esp_bd_addr_t k_transmitter_bda = {0x00, 0x70, 0x07, 0x29, 0x92, 0x36};
 #endif
 
 // 128-bit UUIDs (same byte order as other ESP-IDF 128-bit examples)
@@ -175,7 +214,7 @@ static esp_ble_adv_data_t s_adv_data = {
     .service_data_len = 0,
     .p_service_data = NULL,
     .service_uuid_len = ESP_UUID_LEN_128,
-    .p_service_uuid = tof_rx_svc_uuid128,
+    .p_service_uuid = (uint8_t *)tof_rx_svc_uuid128,
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
 };
 
@@ -316,6 +355,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
             s_echo_notify_enabled = (cfg & 0x0001) != 0;
             ESP_LOGI(TAG, "Echo notify %s", s_echo_notify_enabled ? "enabled" : "disabled");
         } else if (param->write.handle == s_rx_char_hdl && param->write.len >= TOF_PAYLOAD_LEN) {
+            gpio_set_level(TOF_SCOPE_GPIO_RX, 1);
             memcpy(s_rx_payload, param->write.value, TOF_PAYLOAD_LEN);
             led_pulse_rx();
 
@@ -341,6 +381,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
                              seq, t_tx, t_rx);
                 }
             }
+            gpio_set_level(TOF_SCOPE_GPIO_RX, 0);
         }
 
         if (param->write.need_rsp) {
@@ -380,6 +421,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 void app_main(void)
 {
     led_init_rgb();
+    tof_scope_gpio_init_rx();
 
     const esp_timer_create_args_t targs = {
         .callback = &led_off_timer_cb,
@@ -619,6 +661,7 @@ static void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_
                 ESP_LOGW(TAG, "write-RSP failed, status=%d", param->write.status);
             }
             s_write_in_flight = false;
+            gpio_set_level(TOF_SCOPE_GPIO_TX, 0);
         }
         break;
 
@@ -631,6 +674,7 @@ static void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_
         s_have_echo_range = false;
         s_rx_start = s_rx_end = s_echo_start = s_echo_end = 0;
         s_write_in_flight = false;
+        gpio_set_level(TOF_SCOPE_GPIO_TX, 0);
         esp_ble_gap_start_scanning(0);
         break;
 
@@ -659,6 +703,7 @@ static void write_task(void *arg)
         s_wr_buf[3] = (uint8_t)(seq >> 24);
         memcpy(s_wr_buf + 4, &t_us, sizeof(t_us));
 
+        gpio_set_level(TOF_SCOPE_GPIO_TX, 1);
         s_t_write_us = esp_timer_get_time();
         s_write_in_flight = true;
 
@@ -668,6 +713,7 @@ static void write_task(void *arg)
         if (w != ESP_OK) {
             ESP_LOGW(TAG, "write_char failed: %s", esp_err_to_name(w));
             s_write_in_flight = false;
+            gpio_set_level(TOF_SCOPE_GPIO_TX, 0);
         }
         seq++;
     }
@@ -691,6 +737,8 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    tof_scope_gpio_init_tx();
 
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 
