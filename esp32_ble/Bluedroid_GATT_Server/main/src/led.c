@@ -5,7 +5,8 @@
  */
 /* Includes */
 #include "led.h"
-#include "common.h"
+#include "driver/gpio.h"
+#include "led_strip.h"
 
 /* Private variables */
 static uint8_t led_state;

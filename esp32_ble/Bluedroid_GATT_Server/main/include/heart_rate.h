@@ -7,6 +7,7 @@
 #define HEART_RATE_H
 
 #include <stdint.h>
+#include "freertos/FreeRTOS.h"
 
 /* Defines */
 #define HEART_RATE_TASK_PERIOD (1000 / portTICK_PERIOD_MS)

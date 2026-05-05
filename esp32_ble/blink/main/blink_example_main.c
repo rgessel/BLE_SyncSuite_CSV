@@ -1,8 +1,8 @@
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdint.h>
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 #include "driver/i2s_std.h"
 #include "led_strip.h"

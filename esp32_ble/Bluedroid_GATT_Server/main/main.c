@@ -14,14 +14,12 @@
  *     over-the-air + stack; not raw RF ToF, but useful for relative delay measurements).
  */
 
-#include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "esp_system.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
