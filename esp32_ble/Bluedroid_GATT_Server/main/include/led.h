@@ -6,6 +6,8 @@
 #ifndef LED_H
 #define LED_H
 
+#include <stdint.h>
+
 /* Defines */
 #define BLINK_GPIO CONFIG_EXAMPLE_BLINK_GPIO
 
