@@ -2,34 +2,34 @@
 	"sources" : 
 	[
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/CMakeFiles/bootloader"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/CMakeFiles/bootloader"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/CMakeFiles/bootloader.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/CMakeFiles/bootloader.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/CMakeFiles/bootloader-complete.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/CMakeFiles/bootloader-complete.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule"
 		},
 		{
-			"file" : "C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule"
+			"file" : "/Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule"
 		}
 	],
 	"target" : 

@@ -1,0 +1,6 @@
+Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/Users/ryangessel/.espressif/python_env/idf5.5_py3.12_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=0 /Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server
+info: Trying to set symbol EXAMPLE_BLINK_LED_STRIP to n, but it is currently selected by choice EXAMPLE_BLINK_LED. For setting it to n, set another choice symbol to y instead.
+/var/folders/qz/1y3n381x1w15l4w7bykx8ffw0000gn/T/kconfgen_tmpzntcz4ac:5: warning: '"Not determined"' is not a valid value for the bool symbol SOC_BROWNOUT_RESET_SUPPORTED (defined at /Users/ryangessel/esp/esp-idf/./components/soc/esp32/include/soc/Kconfig.soc_caps.in:270). Assignment ignored.
+warning: the value 'y' is invalid for SOC_MPI_OPERATIONS_NUM (defined at /Users/ryangessel/esp/esp-idf/./components/soc/esp32/include/soc/Kconfig.soc_caps.in:826), which has type int -- assignment ignored
+warning: the value 'y' is invalid for SOC_EFUSE_SECURE_BOOT_KEY_DIGESTS (defined at /Users/ryangessel/esp/esp-idf/./components/soc/esp32/include/soc/Kconfig.soc_caps.in:850), which has type int -- assignment ignored
+warning: user value 68 on the int symbol LWIP_DHCP_OPTIONS_LEN (defined at /Users/ryangessel/esp/esp-idf/components/lwip/Kconfig:364) ignored due to being outside the active range ([69, 255]) -- falling back on defaults

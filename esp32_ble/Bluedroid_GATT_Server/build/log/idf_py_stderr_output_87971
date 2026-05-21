@@ -1,0 +1,6 @@
+Command: /Users/ryangessel/.espressif/python_env/idf5.5_py3.12_env/bin/python /Users/ryangessel/esp/esp-idf/tools/idf_monitor.py -p /dev/cu.wchusbserial110 -b 115200 --toolchain-prefix xtensa-esp32-elf- --target esp32 --revision 0 /Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bluedroid_gatt_server.elf /Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/bootloader/bootloader.elf -m '/Users/ryangessel/.espressif/python_env/idf5.5_py3.12_env/bin/python' '/Users/ryangessel/esp/esp-idf/tools/idf.py'
+[0;33m--- esp-idf-monitor 1.9.0 on /dev/cu.wchusbserial110 115200[0m
+[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
+[0m--- 0x40080400: [0;33m_invalid_pc_placeholder[0m[0m at [0;32m/Users/ryangessel/esp/esp-idf/components/xtensa/xtensa_vectors.S[0m[0m:[1;31m2235[0m
+[0m--- 0x40080644: [0;33mcall_start_cpu0[0m[0m at [0;32m/Users/ryangessel/esp/esp-idf/components/bootloader/subproject/main/bootloader_start.c[0m[0m:[1;31m27[0m
+[0m

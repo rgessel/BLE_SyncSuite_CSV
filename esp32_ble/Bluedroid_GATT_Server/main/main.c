@@ -37,7 +37,7 @@
 #include "led_strip.h"
 
 // -------------------- Tunables --------------------
-#define SENSOR_PERIOD_MS   1000  // once per second
+#define SENSOR_PERIOD_MS   250  // four times per second
 #define LED_PULSE_MS       250   // LED on for 250ms after send
 #define SENSOR_PAYLOAD_LEN 12    // seq(4) + t_us(8)
 

@@ -1,2 +1,2 @@
-source C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/gdbinit/symbols
-source C:/Users/burke/Documents/BLE_SyncSuite/esp32_ble/Bluedroid_GATT_Server/build/gdbinit/connect
+source /Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/gdbinit/symbols
+source /Users/ryangessel/BLE_SyncSuite_CSV/esp32_ble/Bluedroid_GATT_Server/build/gdbinit/connect
