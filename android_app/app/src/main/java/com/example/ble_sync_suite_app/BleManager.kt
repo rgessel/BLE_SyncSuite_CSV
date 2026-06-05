@@ -47,6 +47,11 @@ class BleManager(
     private val cheepSyncByAddress = mutableMapOf<String, CheepSync>()
     private val connectingAddresses = mutableSetOf<String>()
 
+    /** True while pausing packet logging and aligning CCCD across boards for a new join. */
+    private var connectionSyncStallActive = false
+    /** Joiners still waiting for service discovery before CCCD is enabled on all boards. */
+    private val stallPendingAddresses = mutableSetOf<String>()
+
     private val _cheepSyncAlphaByDevice = MutableStateFlow<Map<String, Double>>(emptyMap())
     val cheepSyncAlphaByDevice: StateFlow<Map<String, Double>> = _cheepSyncAlphaByDevice.asStateFlow()
     private val _cheepSyncBetaByDevice = MutableStateFlow<Map<String, Double>>(emptyMap())
@@ -62,6 +67,71 @@ class BleManager(
         _cheepSyncAlphaByDevice.value = _cheepSyncAlphaByDevice.value - key
         _cheepSyncBetaByDevice.value = _cheepSyncBetaByDevice.value - key
         _cheepSyncRmsResidualMsByDevice.value = _cheepSyncRmsResidualMsByDevice.value - key
+    }
+
+    private fun resetAllCheepSync() {
+        cheepSyncByAddress.keys.toList().forEach { resetCheepSyncForDevice(it) }
+    }
+
+    /** Pause logging and disable notifications so a new joiner can align CCCD with existing boards. */
+    private fun beginConnectionSyncStall(joinAddress: String) {
+        val firstStall = !connectionSyncStallActive
+        connectionSyncStallActive = true
+        stallPendingAddresses.add(joinAddress)
+        resetAllCheepSync()
+        if (firstStall) {
+            disableNotificationsOnAllConnected()
+        }
+    }
+
+    /** Re-enable notifications on every connected board and resume packet logging. */
+    private fun endConnectionSyncStall() {
+        connectionSyncStallActive = false
+        stallPendingAddresses.clear()
+        resetAllCheepSync()
+        enableNotificationsOnAllConnected()
+    }
+
+    private fun maybeEndConnectionSyncStall() {
+        if (connectionSyncStallActive && stallPendingAddresses.isEmpty() && connectingAddresses.isEmpty()) {
+            endConnectionSyncStall()
+        }
+    }
+
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
+    private fun disableNotificationsForGatt(gatt: BluetoothGatt) {
+        val tx = gatt.getService(ESP32_SERVICE_UUID)?.getCharacteristic(ESP32_CHAR_UUID) ?: return
+        gatt.setCharacteristicNotification(tx, false)
+        tx.getDescriptor(CLIENT_CONFIG_DESCRIPTOR_UUID)?.let { desc ->
+            writeClientConfigValue(gatt, desc, BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE)
+        }
+    }
+
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
+    private fun enableNotificationsForGatt(gatt: BluetoothGatt) {
+        val tx = gatt.getService(ESP32_SERVICE_UUID)?.getCharacteristic(ESP32_CHAR_UUID) ?: return
+        gatt.setCharacteristicNotification(tx, true)
+        tx.getDescriptor(CLIENT_CONFIG_DESCRIPTOR_UUID)?.let { desc ->
+            writeClientConfigValue(gatt, desc, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        }
+    }
+
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
+    private fun disableNotificationsOnAllConnected() {
+        for (gatt in gattByAddress.values) {
+            disableNotificationsForGatt(gatt)
+        }
+    }
+
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
+    private fun enableNotificationsOnAllConnected() {
+        for (gatt in gattByAddress.values) {
+            enableNotificationsForGatt(gatt)
+        }
     }
 
     private fun updateCheepSync(packet: EspPacket) {
@@ -119,8 +189,10 @@ class BleManager(
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Log.e("BLE", "GATT failed status=$status addr=$address")
                 connectingAddresses.remove(address)
+                stallPendingAddresses.remove(address)
                 gattByAddress.remove(address)
                 resetCheepSyncForDevice(address)
+                maybeEndConnectionSyncStall()
                 activity.runOnUiThread {
                     Toast.makeText(activity, "Connection failed ($status)", Toast.LENGTH_SHORT).show()
                 }
@@ -145,8 +217,10 @@ class BleManager(
 
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     resetCheepSyncForDevice(address)
+                    stallPendingAddresses.remove(address)
                     gattByAddress.remove(address)
                     connectingAddresses.remove(address)
+                    maybeEndConnectionSyncStall()
                     activity.runOnUiThread {
                         Toast.makeText(activity, "Disconnected $address", Toast.LENGTH_SHORT).show()
                         onDisconnected(address)
@@ -160,6 +234,7 @@ class BleManager(
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             if (characteristic.uuid != ESP32_CHAR_UUID) return
+            if (connectionSyncStallActive) return
 
             @Suppress("DEPRECATION")
             val value = characteristic.value ?: return
@@ -199,9 +274,11 @@ class BleManager(
             val devName = gatt.device.name ?: "Unnamed"
 
             gatt.getService(ESP32_SERVICE_UUID)?.getCharacteristic(ESP32_CHAR_UUID)?.let { tx ->
-                gatt.setCharacteristicNotification(tx, true)
-                tx.getDescriptor(CLIENT_CONFIG_DESCRIPTOR_UUID)?.let { cccd ->
-                    writeClientConfigValue(gatt, cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                if (connectionSyncStallActive) {
+                    stallPendingAddresses.remove(address)
+                    maybeEndConnectionSyncStall()
+                } else {
+                    enableNotificationsForGatt(gatt)
                 }
 
                 val props = tx.properties
@@ -329,6 +406,10 @@ class BleManager(
         stopBleScan()
         connectingAddresses.add(key)
 
+        if (gattByAddress.isNotEmpty() || connectionSyncStallActive) {
+            beginConnectionSyncStall(key)
+        }
+
         val device = bluetoothAdapter!!.getRemoteDevice(address)
         Handler(Looper.getMainLooper()).postDelayed({
             device.connectGatt(activity, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
@@ -354,5 +435,7 @@ class BleManager(
             disconnectDevice(addr)
         }
         connectingAddresses.clear()
+        connectionSyncStallActive = false
+        stallPendingAddresses.clear()
     }
 }
